@@ -3,15 +3,14 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Download, Settings, RefreshCw, Wallet } from "lucide-react";
+import { Send, Download, Settings, Wallet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateTestnetUSDTAddress } from "@/utils/walletUtils";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function WalletDashboard() {
-  const [addresses, setAddresses] = useState<{ name: string; address: string }[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [newAddress, setNewAddress] = useState("");
+  const [walletAddress, setWalletAddress] = useState("");
   const [copiedAddress, setCopiedAddress] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -20,6 +19,7 @@ export default function WalletDashboard() {
   useEffect(() => {
     loadUserData();
     loadTransactions();
+    loadOrCreateWallet();
   }, []);
 
   const loadUserData = async () => {
@@ -27,6 +27,50 @@ export default function WalletDashboard() {
     if (user) {
       setUserEmail(user.email || "");
     }
+  };
+
+  const loadOrCreateWallet = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // First try to load existing wallet
+    const { data: wallets, error: fetchError } = await supabase
+      .from('wallets')
+      .select('walletaddress')
+      .eq('user_id', user.id)
+      .single();
+
+    if (wallets) {
+      setWalletAddress(wallets.walletaddress);
+      return;
+    }
+
+    // If no wallet exists, create one
+    const generatedAddress = generateTestnetUSDTAddress();
+    const { error: insertError } = await supabase
+      .from('wallets')
+      .insert([
+        { 
+          user_id: user.id,
+          walletaddress: generatedAddress
+        }
+      ]);
+
+    if (insertError) {
+      console.error('Error creating wallet:', insertError);
+      toast({
+        title: "Error",
+        description: "Failed to create wallet address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setWalletAddress(generatedAddress);
+    toast({
+      title: "Wallet Created",
+      description: "Your permanent USDT testnet wallet address has been created.",
+    });
   };
 
   const loadTransactions = async () => {
@@ -43,20 +87,11 @@ export default function WalletDashboard() {
     setTransactions(transactions || []);
   };
 
-  const generateNewAddress = () => {
-    const generatedAddress = generateTestnetUSDTAddress();
-    setNewAddress(generatedAddress);
-    toast({
-      title: "Address Generated",
-      description: "New USDT testnet address has been generated.",
-    });
-  };
-
   const handleTransaction = async (type: 'send' | 'receive') => {
-    if (!newAddress) {
+    if (!walletAddress) {
       toast({
         title: "Error",
-        description: "Please generate an address first",
+        description: "No wallet address available",
         variant: "destructive",
       });
       return;
@@ -80,7 +115,7 @@ export default function WalletDashboard() {
           { 
             user_id: user.id,
             amount: 100, // Example amount
-            recipient_address: newAddress,
+            recipient_address: walletAddress,
             transaction_type: type
           }
         ]);
@@ -135,27 +170,19 @@ export default function WalletDashboard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Wallet className="h-5 w-5" />
-            Generate Address
+            Your Wallet Address
           </CardTitle>
-          <CardDescription>Generate a new USDT testnet address</CardDescription>
+          <CardDescription>Your permanent USDT testnet address</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div className="flex gap-2">
               <Input
                 placeholder="USDT Testnet Address"
-                value={newAddress}
-                onChange={(e) => setNewAddress(e.target.value)}
+                value={walletAddress}
+                readOnly
                 className="flex-1"
               />
-              <Button 
-                onClick={generateNewAddress}
-                variant="outline"
-                className="flex-shrink-0"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Generate
-              </Button>
             </div>
             <div className="flex gap-2">
               <Button 
