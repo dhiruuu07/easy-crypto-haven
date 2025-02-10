@@ -17,7 +17,7 @@ export type Database = {
           recipient_address: string | null
           status: string | null
           transaction_type: string
-          user_id: number | null
+          user_id: string | null
         }
         Insert: {
           amount: number
@@ -26,7 +26,7 @@ export type Database = {
           recipient_address?: string | null
           status?: string | null
           transaction_type: string
-          user_id?: number | null
+          user_id?: string | null
         }
         Update: {
           amount?: number
@@ -35,17 +35,9 @@ export type Database = {
           recipient_address?: string | null
           status?: string | null
           transaction_type?: string
-          user_id?: number | null
+          user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "transactions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       users: {
         Row: {
@@ -72,30 +64,22 @@ export type Database = {
         Row: {
           created_at: string | null
           id: number
-          user_id: number | null
+          user_id: string | null
           walletaddress: string
         }
         Insert: {
           created_at?: string | null
           id?: number
-          user_id?: number | null
+          user_id?: string | null
           walletaddress: string
         }
         Update: {
           created_at?: string | null
           id?: number
-          user_id?: number | null
+          user_id?: string | null
           walletaddress?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "wallets_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
