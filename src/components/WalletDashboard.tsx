@@ -1,19 +1,47 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Copy, Check, Wallet, RefreshCw } from "lucide-react";
+import { Send, Download, Settings, RefreshCw, Wallet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateTestnetUSDTAddress } from "@/utils/walletUtils";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function WalletDashboard() {
   const [addresses, setAddresses] = useState<{ name: string; address: string }[]>([]);
-  const [newName, setNewName] = useState("");
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [newAddress, setNewAddress] = useState("");
   const [copiedAddress, setCopiedAddress] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    loadUserData();
+    loadTransactions();
+  }, []);
+
+  const loadUserData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      setUserEmail(user.email || "");
+    }
+  };
+
+  const loadTransactions = async () => {
+    const { data: transactions, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error loading transactions:', error);
+      return;
+    }
+
+    setTransactions(transactions || []);
+  };
 
   const generateNewAddress = () => {
     const generatedAddress = generateTestnetUSDTAddress();
@@ -24,11 +52,11 @@ export default function WalletDashboard() {
     });
   };
 
-  const handleAddAddress = async () => {
-    if (!newName || !newAddress) {
+  const handleTransaction = async (type: 'send' | 'receive') => {
+    if (!newAddress) {
       toast({
         title: "Error",
-        description: "Please fill in both name and address fields",
+        description: "Please generate an address first",
         variant: "destructive",
       });
       return;
@@ -40,67 +68,79 @@ export default function WalletDashboard() {
       if (!user) {
         toast({
           title: "Error",
-          description: "You must be logged in to add addresses",
+          description: "You must be logged in to perform transactions",
           variant: "destructive",
         });
         return;
       }
 
       const { error } = await supabase
-        .from('wallets')
+        .from('transactions')
         .insert([
           { 
             user_id: user.id,
-            walletaddress: newAddress
+            amount: 100, // Example amount
+            recipient_address: newAddress,
+            transaction_type: type
           }
         ]);
 
       if (error) throw error;
 
-      setAddresses([...addresses, { name: newName, address: newAddress }]);
-      setNewName("");
-      setNewAddress("");
       toast({
         title: "Success",
-        description: "Address added successfully",
+        description: `Transaction ${type} initiated successfully`,
       });
+
+      loadTransactions();
     } catch (error) {
-      console.error('Error adding address:', error);
+      console.error('Error creating transaction:', error);
       toast({
         title: "Error",
-        description: "Failed to add address",
+        description: "Failed to create transaction",
         variant: "destructive",
       });
     }
   };
 
-  const copyToClipboard = (address: string) => {
-    navigator.clipboard.writeText(address);
-    setCopiedAddress(address);
-    setTimeout(() => setCopiedAddress(""), 2000);
-    toast({
-      title: "Copied!",
-      description: "Address copied to clipboard",
-    });
-  };
-
   return (
     <div className="space-y-6 animate-in">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Wallet Dashboard</h1>
+        <Button
+          variant="outline"
+          onClick={() => setShowSettings(!showSettings)}
+        >
+          <Settings className="h-4 w-4 mr-2" />
+          Settings
+        </Button>
+      </div>
+
+      {showSettings && (
+        <Card className="glass-morphism">
+          <CardHeader>
+            <CardTitle>Settings</CardTitle>
+            <CardDescription>Your account details</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Email Address</p>
+              <p className="text-sm text-muted-foreground">{userEmail}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="glass-morphism">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Wallet className="h-5 w-5" />
-            Add New Address
+            Generate Address
           </CardTitle>
-          <CardDescription>Add a new USDT testnet address to your wallet</CardDescription>
+          <CardDescription>Generate a new USDT testnet address</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <Input
-              placeholder="Name (e.g. My USDT Wallet)"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
             <div className="flex gap-2">
               <Input
                 placeholder="USDT Testnet Address"
@@ -117,47 +157,63 @@ export default function WalletDashboard() {
                 Generate
               </Button>
             </div>
-            <Button onClick={handleAddAddress} className="w-full">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Address
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => handleTransaction('send')} 
+                className="flex-1"
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Send
+              </Button>
+              <Button 
+                onClick={() => handleTransaction('receive')} 
+                className="flex-1"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Receive
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       <Card className="glass-morphism">
         <CardHeader>
-          <CardTitle>Your Addresses</CardTitle>
-          <CardDescription>Manage your saved USDT testnet addresses</CardDescription>
+          <CardTitle>Recent Transactions</CardTitle>
+          <CardDescription>Your transaction history</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {addresses.length === 0 ? (
+            {transactions.length === 0 ? (
               <p className="text-center text-muted-foreground">
-                No addresses added yet
+                No transactions yet
               </p>
             ) : (
-              addresses.map((item, index) => (
+              transactions.map((tx) => (
                 <div
-                  key={index}
+                  key={tx.id}
                   className="p-4 rounded-lg border bg-card/50 space-y-2"
                 >
                   <div className="flex items-center justify-between">
-                    <h3 className="font-medium">{item.name}</h3>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => copyToClipboard(item.address)}
-                    >
-                      {copiedAddress === item.address ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
+                    <div>
+                      <h3 className="font-medium capitalize">
+                        {tx.transaction_type}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(tx.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">
+                        {tx.amount} USDT
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {tx.status}
+                      </p>
+                    </div>
                   </div>
                   <p className="text-sm text-muted-foreground break-all">
-                    {item.address}
+                    Address: {tx.recipient_address}
                   </p>
                 </div>
               ))
