@@ -3,8 +3,10 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Copy, Check, Wallet } from "lucide-react";
+import { Plus, Copy, Check, Wallet, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { generateTestnetUSDTAddress } from "@/utils/walletUtils";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function WalletDashboard() {
   const [addresses, setAddresses] = useState<{ name: string; address: string }[]>([]);
@@ -13,7 +15,16 @@ export default function WalletDashboard() {
   const [copiedAddress, setCopiedAddress] = useState("");
   const { toast } = useToast();
 
-  const handleAddAddress = () => {
+  const generateNewAddress = () => {
+    const generatedAddress = generateTestnetUSDTAddress();
+    setNewAddress(generatedAddress);
+    toast({
+      title: "Address Generated",
+      description: "New USDT testnet address has been generated.",
+    });
+  };
+
+  const handleAddAddress = async () => {
     if (!newName || !newAddress) {
       toast({
         title: "Error",
@@ -23,13 +34,44 @@ export default function WalletDashboard() {
       return;
     }
 
-    setAddresses([...addresses, { name: newName, address: newAddress }]);
-    setNewName("");
-    setNewAddress("");
-    toast({
-      title: "Success",
-      description: "Address added successfully",
-    });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to add addresses",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { error } = await supabase
+        .from('wallets')
+        .insert([
+          { 
+            user_id: user.id,
+            walletaddress: newAddress
+          }
+        ]);
+
+      if (error) throw error;
+
+      setAddresses([...addresses, { name: newName, address: newAddress }]);
+      setNewName("");
+      setNewAddress("");
+      toast({
+        title: "Success",
+        description: "Address added successfully",
+      });
+    } catch (error) {
+      console.error('Error adding address:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add address",
+        variant: "destructive",
+      });
+    }
   };
 
   const copyToClipboard = (address: string) => {
@@ -50,20 +92,31 @@ export default function WalletDashboard() {
             <Wallet className="h-5 w-5" />
             Add New Address
           </CardTitle>
-          <CardDescription>Add a new crypto address to your wallet</CardDescription>
+          <CardDescription>Add a new USDT testnet address to your wallet</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <Input
-              placeholder="Name (e.g. My Bitcoin Wallet)"
+              placeholder="Name (e.g. My USDT Wallet)"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
             />
-            <Input
-              placeholder="Crypto Address"
-              value={newAddress}
-              onChange={(e) => setNewAddress(e.target.value)}
-            />
+            <div className="flex gap-2">
+              <Input
+                placeholder="USDT Testnet Address"
+                value={newAddress}
+                onChange={(e) => setNewAddress(e.target.value)}
+                className="flex-1"
+              />
+              <Button 
+                onClick={generateNewAddress}
+                variant="outline"
+                className="flex-shrink-0"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Generate
+              </Button>
+            </div>
             <Button onClick={handleAddAddress} className="w-full">
               <Plus className="h-4 w-4 mr-2" />
               Add Address
@@ -75,7 +128,7 @@ export default function WalletDashboard() {
       <Card className="glass-morphism">
         <CardHeader>
           <CardTitle>Your Addresses</CardTitle>
-          <CardDescription>Manage your saved crypto addresses</CardDescription>
+          <CardDescription>Manage your saved USDT testnet addresses</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
