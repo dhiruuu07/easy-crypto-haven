@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Download, Settings, Wallet } from "lucide-react";
+import { Send, Download, Settings, Wallet, Copy, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateTestnetUSDTAddress } from "@/utils/walletUtils";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,7 +11,11 @@ import { supabase } from "@/integrations/supabase/client";
 export default function WalletDashboard() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [walletAddress, setWalletAddress] = useState("");
-  const [copiedAddress, setCopiedAddress] = useState("");
+  const [balance, setBalance] = useState<number>(0);
+  const [showSendForm, setShowSendForm] = useState(false);
+  const [showReceiveForm, setShowReceiveForm] = useState(false);
+  const [recipientAddress, setRecipientAddress] = useState("");
+  const [sendAmount, setSendAmount] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const { toast } = useToast();
@@ -36,12 +40,13 @@ export default function WalletDashboard() {
     // First try to load existing wallet
     const { data: wallets, error: fetchError } = await supabase
       .from('wallets')
-      .select('walletaddress')
+      .select('walletaddress, balance')
       .eq('user_id', user.id)
       .single();
 
     if (wallets) {
       setWalletAddress(wallets.walletaddress);
+      setBalance(wallets.balance || 0);
       return;
     }
 
@@ -52,7 +57,8 @@ export default function WalletDashboard() {
       .insert([
         { 
           user_id: user.id,
-          walletaddress: generatedAddress
+          walletaddress: generatedAddress,
+          balance: 100 // Initial balance for new users
         }
       ]);
 
@@ -67,9 +73,10 @@ export default function WalletDashboard() {
     }
 
     setWalletAddress(generatedAddress);
+    setBalance(100);
     toast({
       title: "Wallet Created",
-      description: "Your permanent USDT testnet wallet address has been created.",
+      description: "Your permanent USDT testnet wallet has been created with 100 USDT.",
     });
   };
 
@@ -87,11 +94,46 @@ export default function WalletDashboard() {
     setTransactions(transactions || []);
   };
 
-  const handleTransaction = async (type: 'send' | 'receive') => {
-    if (!walletAddress) {
+  const handleCopyAddress = async () => {
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      toast({
+        title: "Address Copied",
+        description: "Wallet address copied to clipboard",
+      });
+    } catch (err) {
       toast({
         title: "Error",
-        description: "No wallet address available",
+        description: "Failed to copy address",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSendTransaction = async () => {
+    if (!walletAddress || !recipientAddress || !sendAmount) {
+      toast({
+        title: "Error",
+        description: "Please fill in all fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const amount = parseFloat(sendAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid amount",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (amount > balance) {
+      toast({
+        title: "Error",
+        description: "Insufficient balance",
         variant: "destructive",
       });
       return;
@@ -109,30 +151,58 @@ export default function WalletDashboard() {
         return;
       }
 
-      const { error } = await supabase
+      // First create the transaction
+      const { error: transactionError } = await supabase
         .from('transactions')
         .insert([
           { 
             user_id: user.id,
-            amount: 100, // Example amount
-            recipient_address: walletAddress,
-            transaction_type: type
+            amount: amount,
+            recipient_address: recipientAddress,
+            sender_address: walletAddress,
+            transaction_type: 'send',
+            status: 'completed'
           }
         ]);
 
-      if (error) throw error;
+      if (transactionError) throw transactionError;
+
+      // Update sender's balance
+      const { error: senderUpdateError } = await supabase
+        .from('wallets')
+        .update({ balance: balance - amount })
+        .eq('user_id', user.id);
+
+      if (senderUpdateError) throw senderUpdateError;
+
+      // Update recipient's balance
+      const { error: recipientUpdateError } = await supabase
+        .from('wallets')
+        .update({ 
+          balance: supabase.sql`balance + ${amount}` 
+        })
+        .eq('walletaddress', recipientAddress);
+
+      if (recipientUpdateError) throw recipientUpdateError;
 
       toast({
         title: "Success",
-        description: `Transaction ${type} initiated successfully`,
+        description: "Transaction completed successfully",
       });
 
+      // Reset form
+      setShowSendForm(false);
+      setRecipientAddress("");
+      setSendAmount("");
+      
+      // Refresh data
       loadTransactions();
+      loadOrCreateWallet();
     } catch (error) {
       console.error('Error creating transaction:', error);
       toast({
         title: "Error",
-        description: "Failed to create transaction",
+        description: "Failed to complete transaction",
         variant: "destructive",
       });
     }
@@ -170,36 +240,90 @@ export default function WalletDashboard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Wallet className="h-5 w-5" />
-            Your Wallet Address
+            Your Wallet
           </CardTitle>
-          <CardDescription>Your permanent USDT testnet address</CardDescription>
+          <CardDescription>Your USDT testnet wallet</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                placeholder="USDT Testnet Address"
-                value={walletAddress}
-                readOnly
-                className="flex-1"
-              />
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div>
+                <p className="text-sm font-medium">Current Balance</p>
+                <p className="text-2xl font-bold">{balance} USDT</p>
+              </div>
             </div>
             <div className="flex gap-2">
               <Button 
-                onClick={() => handleTransaction('send')} 
+                onClick={() => {
+                  setShowSendForm(true);
+                  setShowReceiveForm(false);
+                }}
                 className="flex-1"
+                variant={showSendForm ? "secondary" : "default"}
               >
                 <Send className="h-4 w-4 mr-2" />
                 Send
               </Button>
               <Button 
-                onClick={() => handleTransaction('receive')} 
+                onClick={() => {
+                  setShowReceiveForm(true);
+                  setShowSendForm(false);
+                }}
                 className="flex-1"
+                variant={showReceiveForm ? "secondary" : "default"}
               >
                 <Download className="h-4 w-4 mr-2" />
                 Receive
               </Button>
             </div>
+
+            {showReceiveForm && (
+              <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+                <h3 className="font-medium">Your Wallet Address</h3>
+                <div className="flex gap-2">
+                  <Input
+                    value={walletAddress}
+                    readOnly
+                    className="flex-1"
+                  />
+                  <Button onClick={handleCopyAddress} variant="outline">
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {showSendForm && (
+              <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+                <h3 className="font-medium">Send USDT</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">Recipient Address</label>
+                    <Input
+                      placeholder="Enter recipient's wallet address"
+                      value={recipientAddress}
+                      onChange={(e) => setRecipientAddress(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Amount (USDT)</label>
+                    <Input
+                      type="number"
+                      placeholder="Enter amount to send"
+                      value={sendAmount}
+                      onChange={(e) => setSendAmount(e.target.value)}
+                    />
+                  </div>
+                  <Button 
+                    onClick={handleSendTransaction}
+                    className="w-full"
+                  >
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Send USDT
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -240,7 +364,8 @@ export default function WalletDashboard() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground break-all">
-                    Address: {tx.recipient_address}
+                    {tx.transaction_type === 'send' ? 'To: ' : 'From: '}
+                    {tx.transaction_type === 'send' ? tx.recipient_address : tx.sender_address}
                   </p>
                 </div>
               ))

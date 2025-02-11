@@ -15,6 +15,7 @@ export type Database = {
           created_at: string | null
           id: number
           recipient_address: string | null
+          sender_address: string | null
           status: string | null
           transaction_type: string
           user_id: string | null
@@ -24,6 +25,7 @@ export type Database = {
           created_at?: string | null
           id?: number
           recipient_address?: string | null
+          sender_address?: string | null
           status?: string | null
           transaction_type: string
           user_id?: string | null
@@ -33,6 +35,7 @@ export type Database = {
           created_at?: string | null
           id?: number
           recipient_address?: string | null
+          sender_address?: string | null
           status?: string | null
           transaction_type?: string
           user_id?: string | null
@@ -62,18 +65,21 @@ export type Database = {
       }
       wallets: {
         Row: {
+          balance: number | null
           created_at: string | null
           id: number
           user_id: string | null
           walletaddress: string
         }
         Insert: {
+          balance?: number | null
           created_at?: string | null
           id?: number
           user_id?: string | null
           walletaddress: string
         }
         Update: {
+          balance?: number | null
           created_at?: string | null
           id?: number
           user_id?: string | null
