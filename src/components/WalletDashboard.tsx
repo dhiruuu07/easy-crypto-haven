@@ -81,9 +81,13 @@ export default function WalletDashboard() {
   };
 
   const loadTransactions = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     const { data: transactions, error } = await supabase
       .from('transactions')
       .select('*')
+      .or(`sender_address.eq.${walletAddress},recipient_address.eq.${walletAddress}`)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -151,7 +155,23 @@ export default function WalletDashboard() {
         return;
       }
 
-      // First create the transaction
+      // First, check if recipient wallet exists
+      const { data: recipientWallet, error: recipientCheckError } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('walletaddress', recipientAddress)
+        .single();
+
+      if (!recipientWallet || recipientCheckError) {
+        toast({
+          title: "Error",
+          description: "Recipient wallet not found",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Create the transaction
       const { error: transactionError } = await supabase
         .from('transactions')
         .insert([
@@ -175,20 +195,11 @@ export default function WalletDashboard() {
 
       if (senderUpdateError) throw senderUpdateError;
 
-      // Get recipient's current balance
-      const { data: recipientData, error: recipientError } = await supabase
-        .from('wallets')
-        .select('balance')
-        .eq('walletaddress', recipientAddress)
-        .single();
-
-      if (recipientError) throw recipientError;
-
       // Update recipient's balance
       const { error: recipientUpdateError } = await supabase
         .from('wallets')
         .update({ 
-          balance: (recipientData.balance || 0) + amount 
+          balance: recipientWallet.balance + amount 
         })
         .eq('walletaddress', recipientAddress);
 
