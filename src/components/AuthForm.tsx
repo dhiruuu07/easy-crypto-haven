@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Lock, Loader2 } from "lucide-react";
 
@@ -40,57 +40,58 @@ export default function AuthForm({ mode, onToggleMode }: AuthFormProps) {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto bg-[#222222] border-none shadow-2xl">
+    <Card className="w-full max-w-md mx-auto glass-morphism animate-in">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-3xl font-medium text-center text-[#007bff]">
-          {mode === "signin" ? "Sign In" : "Sign Up"}
+        <CardTitle className="text-2xl font-medium">
+          {mode === "signin" ? "Welcome back" : "Create an account"}
         </CardTitle>
+        <CardDescription>
+          {mode === "signin"
+            ? "Enter your credentials to access your account"
+            : "Enter your details to create your account"}
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
             <div className="relative">
-              <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+              <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Enter Email"
+                placeholder="Email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="pl-10 h-12 bg-[#333333] border-[#007bff] text-white placeholder:text-gray-400 focus:ring-[#007bff] focus:border-[#007bff]"
+                className="pl-10"
                 required
               />
             </div>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-2">
             <div className="relative">
-              <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+              <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Enter Password"
+                placeholder="Password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="pl-10 h-12 bg-[#333333] border-[#007bff] text-white placeholder:text-gray-400 focus:ring-[#007bff] focus:border-[#007bff]"
+                className="pl-10"
                 required
               />
             </div>
           </div>
-          <div className="space-y-4">
-            <Button 
-              className="w-full h-12 bg-[#007bff] hover:bg-[#0056b3] text-white text-lg transform transition-transform duration-200 active:scale-95 shadow-lg hover:shadow-xl"
-              type="submit" 
-              disabled={isLoading}
-            >
-              {isLoading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
-              {mode === "signin" ? "Sign In" : "Sign Up"}
-            </Button>
+          <Button className="w-full" type="submit" disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {mode === "signin" ? "Sign In" : "Sign Up"}
+          </Button>
+          <div className="text-center text-sm">
             <button
               type="button"
               onClick={onToggleMode}
-              className="w-full h-12 bg-[#007bff] hover:bg-[#0056b3] text-white text-lg transform transition-transform duration-200 active:scale-95 shadow-lg hover:shadow-xl rounded-md"
+              className="text-primary hover:underline"
             >
               {mode === "signin"
-                ? "Sign Up"
-                : "Sign In"}
+                ? "Don't have an account? Sign up"
+                : "Already have an account? Sign in"}
             </button>
           </div>
         </form>
