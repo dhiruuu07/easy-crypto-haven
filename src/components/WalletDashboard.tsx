@@ -175,11 +175,20 @@ export default function WalletDashboard() {
 
       if (senderUpdateError) throw senderUpdateError;
 
+      // Get recipient's current balance
+      const { data: recipientData, error: recipientError } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('walletaddress', recipientAddress)
+        .single();
+
+      if (recipientError) throw recipientError;
+
       // Update recipient's balance
       const { error: recipientUpdateError } = await supabase
         .from('wallets')
         .update({ 
-          balance: supabase.sql`balance + ${amount}` 
+          balance: (recipientData.balance || 0) + amount 
         })
         .eq('walletaddress', recipientAddress);
 
