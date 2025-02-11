@@ -1,29 +1,11 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import AuthForm from "@/components/AuthForm";
 import WalletDashboard from "@/components/WalletDashboard";
-import { supabase } from "@/integrations/supabase/client";
-import type { Session } from "@supabase/supabase-js";
 
 const Index = () => {
-  const [session, setSession] = useState<Session | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
-
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-green-50 to-blue-50 p-6">
@@ -38,7 +20,7 @@ const Index = () => {
         </header>
 
         <main className="page-transition">
-          {!session ? (
+          {!isAuthenticated ? (
             <AuthForm
               mode={authMode}
               onToggleMode={() =>
@@ -52,6 +34,6 @@ const Index = () => {
       </div>
     </div>
   );
-};
+}
 
 export default Index;

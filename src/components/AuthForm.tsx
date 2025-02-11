@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Lock, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 interface AuthFormProps {
   mode: "signin" | "signup";
@@ -23,36 +22,16 @@ export default function AuthForm({ mode, onToggleMode }: AuthFormProps) {
     setIsLoading(true);
 
     try {
-      if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        
-        if (error) throw error;
-
-        toast({
-          title: "Account created successfully!",
-          description: "Please check your email to verify your account.",
-        });
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        
-        if (error) throw error;
-
-        toast({
-          title: "Welcome back!",
-          description: "You are now logged in.",
-        });
-      }
+      // TODO: Implement actual auth logic
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      toast({
+        title: mode === "signin" ? "Welcome back!" : "Account created successfully!",
+        description: "You are now logged in.",
+      });
     } catch (error) {
-      console.error('Authentication error:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Something went wrong. Please try again.",
+        description: "Something went wrong. Please try again.",
         variant: "destructive",
       });
     } finally {
