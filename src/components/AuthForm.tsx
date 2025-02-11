@@ -9,9 +9,10 @@ import { Mail, Lock, Loader2 } from "lucide-react";
 interface AuthFormProps {
   mode: "signin" | "signup";
   onToggleMode: () => void;
+  onAuthenticate?: () => void;
 }
 
-export default function AuthForm({ mode, onToggleMode }: AuthFormProps) {
+export default function AuthForm({ mode, onToggleMode, onAuthenticate }: AuthFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -28,6 +29,9 @@ export default function AuthForm({ mode, onToggleMode }: AuthFormProps) {
         title: mode === "signin" ? "Welcome back!" : "Account created successfully!",
         description: "You are now logged in.",
       });
+      if (onAuthenticate) {
+        onAuthenticate();
+      }
     } catch (error) {
       toast({
         title: "Error",

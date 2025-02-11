@@ -26,6 +26,7 @@ const Index = () => {
               onToggleMode={() =>
                 setAuthMode(authMode === "signin" ? "signup" : "signin")
               }
+              onAuthenticate={() => setIsAuthenticated(true)}
             />
           ) : (
             <WalletDashboard />
