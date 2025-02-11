@@ -12,7 +12,7 @@ const Index = () => {
       <div className="max-w-4xl mx-auto">
         <header className="text-center mb-10">
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-            Easy Crypto Haven
+            PD's Crypto Wallet
           </h1>
           <p className="text-muted-foreground">
             Your secure gateway to cryptocurrency management
