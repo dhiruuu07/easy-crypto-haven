@@ -1,9 +1,8 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Download, Settings, Wallet, Copy, ArrowRight } from "lucide-react";
+import { Send, Download, Settings, Wallet, Copy, ArrowRight, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateTestnetUSDTAddress } from "@/utils/walletUtils";
 import { supabase } from "@/integrations/supabase/client";
@@ -228,6 +227,22 @@ export default function WalletDashboard() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      toast({
+        title: "Logged out successfully",
+        description: "You have been signed out of your account.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in">
       <div className="flex justify-between items-center">
@@ -248,9 +263,19 @@ export default function WalletDashboard() {
             <CardDescription>Your account details</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Email Address</p>
-              <p className="text-sm text-muted-foreground">{userEmail}</p>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Email Address</p>
+                <p className="text-sm text-muted-foreground">{userEmail}</p>
+              </div>
+              <Button 
+                variant="destructive" 
+                onClick={handleLogout}
+                className="w-full"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
             </div>
           </CardContent>
         </Card>
