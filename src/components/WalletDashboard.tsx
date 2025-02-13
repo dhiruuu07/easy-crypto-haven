@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Download, Settings, Wallet, Copy, ArrowRight, LogOut } from "lucide-react";
+import { Send, Download, Settings, Wallet, Copy, ArrowRight, LogOut, Sun, Moon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateTestnetUSDTAddress } from "@/utils/walletUtils";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function WalletDashboard() {
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [walletAddress, setWalletAddress] = useState("");
   const [balance, setBalance] = useState<number>(0);
@@ -24,6 +25,19 @@ export default function WalletDashboard() {
     loadTransactions();
     loadOrCreateWallet();
   }, []);
+
+  useEffect(() => {
+    // Check if user prefers dark mode
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setIsDarkMode(true);
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    setIsDarkMode(!isDarkMode);
+    document.documentElement.classList.toggle('dark');
+  };
 
   const loadUserData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -247,13 +261,23 @@ export default function WalletDashboard() {
     <div className="space-y-6 animate-in">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Wallet Dashboard</h1>
-        <Button
-          variant="outline"
-          onClick={() => setShowSettings(!showSettings)}
-        >
-          <Settings className="h-4 w-4 mr-2" />
-          Settings
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={toggleTheme}
+            className="button-3d"
+          >
+            {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowSettings(!showSettings)}
+            className="button-3d"
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Settings
+          </Button>
+        </div>
       </div>
 
       {showSettings && (
@@ -271,7 +295,7 @@ export default function WalletDashboard() {
               <Button 
                 variant="destructive" 
                 onClick={handleLogout}
-                className="w-full"
+                className="w-full button-3d-destructive"
               >
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
@@ -303,7 +327,7 @@ export default function WalletDashboard() {
                   setShowSendForm(true);
                   setShowReceiveForm(false);
                 }}
-                className="flex-1"
+                className="flex-1 button-3d"
                 variant={showSendForm ? "secondary" : "default"}
               >
                 <Send className="h-4 w-4 mr-2" />
@@ -314,7 +338,7 @@ export default function WalletDashboard() {
                   setShowReceiveForm(true);
                   setShowSendForm(false);
                 }}
-                className="flex-1"
+                className="flex-1 button-3d"
                 variant={showReceiveForm ? "secondary" : "default"}
               >
                 <Download className="h-4 w-4 mr-2" />
@@ -331,7 +355,7 @@ export default function WalletDashboard() {
                     readOnly
                     className="flex-1"
                   />
-                  <Button onClick={handleCopyAddress} variant="outline">
+                  <Button onClick={handleCopyAddress} variant="outline" className="button-3d">
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
@@ -361,7 +385,7 @@ export default function WalletDashboard() {
                   </div>
                   <Button 
                     onClick={handleSendTransaction}
-                    className="w-full"
+                    className="w-full button-3d"
                   >
                     <ArrowRight className="h-4 w-4 mr-2" />
                     Send USDT

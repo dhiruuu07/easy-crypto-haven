@@ -26,7 +26,7 @@ export default {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
+          DEFAULT: "#0EA5E9", // Ocean Blue for buttons
           foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {

@@ -26,6 +26,28 @@
     --ring: 142.1 76.2% 36.3%;
     --radius: 0.75rem;
   }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+  }
 }
 
 @layer base {
@@ -38,7 +60,7 @@
 }
 
 .glass-morphism {
-  @apply bg-white/80 backdrop-blur-lg border border-white/20;
+  @apply bg-white/80 backdrop-blur-lg border border-white/20 dark:bg-gray-900/80;
 }
 
 .animate-in {
@@ -58,4 +80,17 @@
 
 .page-transition {
   @apply transition-all duration-300 ease-in-out;
+}
+
+/* 3D Button Styles */
+.button-3d {
+  @apply transform active:scale-95 transition-transform 
+         shadow-[0_4px_0_0_#0b87bf] active:shadow-[0_0_0_0_#0b87bf] 
+         active:translate-y-1;
+}
+
+.button-3d-destructive {
+  @apply transform active:scale-95 transition-transform 
+         shadow-[0_4px_0_0_#be123c] active:shadow-[0_0_0_0_#be123c] 
+         active:translate-y-1;
 }
