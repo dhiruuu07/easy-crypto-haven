@@ -18,7 +18,7 @@ export type Database = {
           sender_address: string | null
           status: string | null
           transaction_type: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           amount: number
@@ -28,7 +28,7 @@ export type Database = {
           sender_address?: string | null
           status?: string | null
           transaction_type: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           amount?: number
@@ -38,7 +38,7 @@ export type Database = {
           sender_address?: string | null
           status?: string | null
           transaction_type?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -68,21 +68,21 @@ export type Database = {
           balance: number | null
           created_at: string | null
           id: number
-          user_id: string | null
+          user_id: string
           walletaddress: string
         }
         Insert: {
           balance?: number | null
           created_at?: string | null
           id?: number
-          user_id?: string | null
+          user_id: string
           walletaddress: string
         }
         Update: {
           balance?: number | null
           created_at?: string | null
           id?: number
-          user_id?: string | null
+          user_id?: string
           walletaddress?: string
         }
         Relationships: []
