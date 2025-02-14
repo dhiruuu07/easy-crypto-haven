@@ -72,11 +72,11 @@ const Index = () => {
   }, [toast]);
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-green-50 to-blue-50 p-6 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 to-gray-100 p-6 dark:from-gray-900 dark:to-gray-800">
       <div className="max-w-4xl mx-auto">
         <header className="text-center mb-10">
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent dark:from-green-400 dark:to-emerald-400">
-            PD's Crypto Wallet
+          <h1 className="text-4xl font-bold mb-2 text-[#9b87f5] dark:text-[#D6BCFA]">
+            Test Wallet
           </h1>
           <p className="text-muted-foreground">
             Your secure gateway to cryptocurrency management
