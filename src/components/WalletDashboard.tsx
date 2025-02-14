@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,9 +23,15 @@ export default function WalletDashboard() {
 
   useEffect(() => {
     loadUserData();
-    loadTransactions();
     loadOrCreateWallet();
   }, []);
+
+  // Add a separate effect for loading transactions that depends on walletAddress
+  useEffect(() => {
+    if (walletAddress) {
+      loadTransactions();
+    }
+  }, [walletAddress]);
 
   useEffect(() => {
     // Check if user prefers dark mode
@@ -94,8 +101,7 @@ export default function WalletDashboard() {
   };
 
   const loadTransactions = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!walletAddress) return;
 
     const { data: transactions, error } = await supabase
       .from('transactions')
@@ -108,7 +114,16 @@ export default function WalletDashboard() {
       return;
     }
 
-    setTransactions(transactions || []);
+    // Process transactions to include transaction direction
+    const processedTransactions = transactions?.map(tx => ({
+      ...tx,
+      // Add isReceived flag to determine if this wallet received the transaction
+      isReceived: tx.recipient_address === walletAddress,
+      // Format the display amount based on whether it was received or sent
+      displayAmount: tx.recipient_address === walletAddress ? `+${tx.amount}` : `-${tx.amount}`
+    })) || [];
+
+    setTransactions(processedTransactions);
   };
 
   const handleCopyAddress = async () => {
@@ -416,16 +431,16 @@ export default function WalletDashboard() {
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-medium capitalize">
-                        {tx.transaction_type}
+                      <h3 className="font-medium">
+                        {tx.isReceived ? 'Received' : 'Sent'}
                       </h3>
                       <p className="text-sm text-muted-foreground">
                         {new Date(tx.created_at).toLocaleString()}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium">
-                        {tx.amount} USDT
+                      <p className={`font-medium ${tx.isReceived ? 'text-green-500' : 'text-red-500'}`}>
+                        {tx.displayAmount} USDT
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {tx.status}
@@ -433,8 +448,8 @@ export default function WalletDashboard() {
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground break-all">
-                    {tx.transaction_type === 'send' ? 'To: ' : 'From: '}
-                    {tx.transaction_type === 'send' ? tx.recipient_address : tx.sender_address}
+                    {tx.isReceived ? 'From: ' : 'To: '}
+                    {tx.isReceived ? tx.sender_address : tx.recipient_address}
                   </p>
                 </div>
               ))
