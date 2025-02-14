@@ -183,7 +183,7 @@ export default function WalletDashboard() {
         return;
       }
 
-      // First, check if recipient wallet exists
+      // First, check if recipient wallet exists and get its current balance
       const { data: recipientWallet, error: recipientCheckError } = await supabase
         .from('wallets')
         .select('balance')
@@ -219,7 +219,7 @@ export default function WalletDashboard() {
       const { error: senderUpdateError } = await supabase
         .from('wallets')
         .update({ balance: balance - amount })
-        .eq('user_id', user.id);
+        .eq('walletaddress', walletAddress);
 
       if (senderUpdateError) throw senderUpdateError;
 
