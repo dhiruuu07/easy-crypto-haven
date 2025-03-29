@@ -3,15 +3,26 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Download, Settings, Wallet, Copy, ArrowRight, LogOut, Sun, Moon } from "lucide-react";
+import { Send, Download, Settings, Wallet, Copy, ArrowRight, LogOut, Sun, Moon, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateTestnetUSDTAddress } from "@/utils/walletUtils";
+import {
+  NetworkKey,
+  createWalletFromPrivateKey,
+  generateNewWallet,
+  getWalletBalance,
+  sendTransaction,
+  getRecentTransactions,
+  getCurrentNetwork
+} from "@/utils/blockchainUtils";
 import { supabase } from "@/integrations/supabase/client";
+import NetworkSelector from "./NetworkSelector";
 
 export default function WalletDashboard() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [walletAddress, setWalletAddress] = useState("");
+  const [privateKey, setPrivateKey] = useState(""); // Store private key safely
   const [balance, setBalance] = useState<number>(0);
   const [showSendForm, setShowSendForm] = useState(false);
   const [showReceiveForm, setShowReceiveForm] = useState(false);
@@ -19,6 +30,8 @@ export default function WalletDashboard() {
   const [sendAmount, setSendAmount] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [usingBlockchain, setUsingBlockchain] = useState(false); // Toggle between mock and real blockchain
   const { toast } = useToast();
 
   useEffect(() => {
@@ -29,9 +42,13 @@ export default function WalletDashboard() {
   // Add a separate effect for loading transactions that depends on walletAddress
   useEffect(() => {
     if (walletAddress) {
-      loadTransactions();
+      if (usingBlockchain) {
+        loadBlockchainTransactions();
+      } else {
+        loadMockTransactions();
+      }
     }
-  }, [walletAddress]);
+  }, [walletAddress, usingBlockchain]);
 
   useEffect(() => {
     // Check if user prefers dark mode
@@ -60,47 +77,75 @@ export default function WalletDashboard() {
     // First try to load existing wallet
     const { data: wallets, error: fetchError } = await supabase
       .from('wallets')
-      .select('walletaddress, balance')
+      .select('walletaddress, balance, private_key')
       .eq('user_id', user.id)
       .single();
 
     if (wallets) {
       setWalletAddress(wallets.walletaddress);
       setBalance(wallets.balance || 0);
+      if (wallets.private_key) {
+        setPrivateKey(wallets.private_key);
+      }
       return;
     }
 
-    // If no wallet exists, create one
-    const generatedAddress = generateTestnetUSDTAddress();
-    const { error: insertError } = await supabase
-      .from('wallets')
-      .insert([
-        { 
-          user_id: user.id,
-          walletaddress: generatedAddress,
-          balance: 100 // Initial balance for new users
-        }
-      ]);
+    try {
+      // If no wallet exists, create one
+      let generatedAddress = "";
+      let generatedPrivateKey = "";
+      
+      if (usingBlockchain) {
+        // Create a real blockchain wallet
+        const wallet = generateNewWallet();
+        generatedAddress = wallet.address;
+        generatedPrivateKey = wallet.privateKey;
+      } else {
+        // Create a mock wallet address
+        generatedAddress = generateTestnetUSDTAddress();
+        // For mock wallets, we don't need a real private key
+        generatedPrivateKey = "0x" + Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+      }
 
-    if (insertError) {
-      console.error('Error creating wallet:', insertError);
+      const { error: insertError } = await supabase
+        .from('wallets')
+        .insert([
+          { 
+            user_id: user.id,
+            walletaddress: generatedAddress,
+            balance: 100, // Initial balance for new users
+            private_key: generatedPrivateKey
+          }
+        ]);
+
+      if (insertError) {
+        console.error('Error creating wallet:', insertError);
+        toast({
+          title: "Error",
+          description: "Failed to create wallet address",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setWalletAddress(generatedAddress);
+      setPrivateKey(generatedPrivateKey);
+      setBalance(100);
+      toast({
+        title: "Wallet Created",
+        description: `Your ${usingBlockchain ? "blockchain" : "testnet"} wallet has been created with 100 ${usingBlockchain ? getCurrentNetwork().symbol : "USDT"}.`,
+      });
+    } catch (error) {
+      console.error('Error creating wallet:', error);
       toast({
         title: "Error",
-        description: "Failed to create wallet address",
+        description: "Failed to create wallet",
         variant: "destructive",
       });
-      return;
     }
-
-    setWalletAddress(generatedAddress);
-    setBalance(100);
-    toast({
-      title: "Wallet Created",
-      description: "Your permanent USDT testnet wallet has been created with 100 USDT.",
-    });
   };
 
-  const loadTransactions = async () => {
+  const loadMockTransactions = async () => {
     if (!walletAddress) return;
 
     const { data: transactions, error } = await supabase
@@ -124,6 +169,30 @@ export default function WalletDashboard() {
     })) || [];
 
     setTransactions(processedTransactions);
+  };
+
+  const loadBlockchainTransactions = async () => {
+    if (!walletAddress) return;
+    
+    setIsLoading(true);
+    try {
+      // First update the wallet balance from blockchain
+      const blockchainBalance = await getWalletBalance(walletAddress);
+      setBalance(parseFloat(blockchainBalance));
+      
+      // Then fetch recent transactions
+      const txs = await getRecentTransactions(walletAddress);
+      setTransactions(txs);
+    } catch (error) {
+      console.error('Error loading blockchain data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load blockchain data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCopyAddress = async () => {
@@ -171,81 +240,105 @@ export default function WalletDashboard() {
       return;
     }
 
+    setIsLoading(true);
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
+      if (usingBlockchain) {
+        // Send a real blockchain transaction
+        if (!privateKey) {
+          throw new Error("Private key not found");
+        }
+        
+        const result = await sendTransaction(privateKey, recipientAddress, sendAmount);
+        
+        if (!result.success) {
+          throw new Error(result.error || "Transaction failed");
+        }
+        
         toast({
-          title: "Error",
-          description: "You must be logged in to perform transactions",
-          variant: "destructive",
+          title: "Transaction Sent",
+          description: `Transaction submitted with hash: ${result.hash?.slice(0, 10)}...`,
         });
-        return;
-      }
+        
+        // Reload blockchain data after transaction
+        await loadBlockchainTransactions();
+      } else {
+        // Send a mock transaction
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          toast({
+            title: "Error",
+            description: "You must be logged in to perform transactions",
+            variant: "destructive",
+          });
+          return;
+        }
 
-      // First, check if recipient wallet exists and get its current balance
-      const { data: recipientWallet, error: recipientCheckError } = await supabase
-        .from('wallets')
-        .select('balance')
-        .eq('walletaddress', recipientAddress)
-        .single();
+        // First, check if recipient wallet exists and get its current balance
+        const { data: recipientWallet, error: recipientCheckError } = await supabase
+          .from('wallets')
+          .select('balance')
+          .eq('walletaddress', recipientAddress)
+          .single();
 
-      if (!recipientWallet || recipientCheckError) {
+        if (!recipientWallet || recipientCheckError) {
+          toast({
+            title: "Error",
+            description: "Recipient wallet not found",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Create the transaction
+        const { error: transactionError } = await supabase
+          .from('transactions')
+          .insert([
+            { 
+              user_id: user.id,
+              amount: amount,
+              recipient_address: recipientAddress,
+              sender_address: walletAddress,
+              transaction_type: 'send',
+              status: 'completed'
+            }
+          ]);
+
+        if (transactionError) throw transactionError;
+
+        // Update sender's balance
+        const { error: senderUpdateError } = await supabase
+          .from('wallets')
+          .update({ balance: balance - amount })
+          .eq('walletaddress', walletAddress);
+
+        if (senderUpdateError) throw senderUpdateError;
+
+        // Update recipient's balance
+        const { error: recipientUpdateError } = await supabase
+          .from('wallets')
+          .update({ 
+            balance: recipientWallet.balance + amount 
+          })
+          .eq('walletaddress', recipientAddress);
+
+        if (recipientUpdateError) throw recipientUpdateError;
+
         toast({
-          title: "Error",
-          description: "Recipient wallet not found",
-          variant: "destructive",
+          title: "Success",
+          description: "Transaction completed successfully",
         });
-        return;
+        
+        // Refresh data
+        loadMockTransactions();
+        setBalance(prev => prev - amount);
       }
-
-      // Create the transaction
-      const { error: transactionError } = await supabase
-        .from('transactions')
-        .insert([
-          { 
-            user_id: user.id,
-            amount: amount,
-            recipient_address: recipientAddress,
-            sender_address: walletAddress,
-            transaction_type: 'send',
-            status: 'completed'
-          }
-        ]);
-
-      if (transactionError) throw transactionError;
-
-      // Update sender's balance
-      const { error: senderUpdateError } = await supabase
-        .from('wallets')
-        .update({ balance: balance - amount })
-        .eq('walletaddress', walletAddress);
-
-      if (senderUpdateError) throw senderUpdateError;
-
-      // Update recipient's balance
-      const { error: recipientUpdateError } = await supabase
-        .from('wallets')
-        .update({ 
-          balance: recipientWallet.balance + amount 
-        })
-        .eq('walletaddress', recipientAddress);
-
-      if (recipientUpdateError) throw recipientUpdateError;
-
-      toast({
-        title: "Success",
-        description: "Transaction completed successfully",
-      });
 
       // Reset form
       setShowSendForm(false);
       setRecipientAddress("");
       setSendAmount("");
-      
-      // Refresh data
-      loadTransactions();
-      loadOrCreateWallet();
     } catch (error) {
       console.error('Error creating transaction:', error);
       toast({
@@ -253,7 +346,28 @@ export default function WalletDashboard() {
         description: "Failed to complete transaction",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleNetworkChange = (network: NetworkKey) => {
+    // Reload blockchain data when network changes
+    if (usingBlockchain && walletAddress) {
+      loadBlockchainTransactions();
+    }
+  };
+
+  const toggleBlockchainMode = () => {
+    const newMode = !usingBlockchain;
+    setUsingBlockchain(newMode);
+    
+    toast({
+      title: newMode ? "Blockchain Mode Enabled" : "Mock Mode Enabled",
+      description: newMode 
+        ? "You are now using actual blockchain testnet. Transactions will be real." 
+        : "You are now using mock transactions in the Supabase database.",
+    });
   };
 
   const handleLogout = async () => {
@@ -270,6 +384,11 @@ export default function WalletDashboard() {
         variant: "destructive",
       });
     }
+  };
+
+  const getExplorerUrl = (txHash: string) => {
+    const network = getCurrentNetwork();
+    return `${network.blockExplorer}/tx/${txHash}`;
   };
 
   return (
@@ -307,6 +426,36 @@ export default function WalletDashboard() {
                 <p className="text-sm font-medium">Email Address</p>
                 <p className="text-sm text-muted-foreground">{userEmail}</p>
               </div>
+              
+              <div className="space-y-2 pt-2 border-t">
+                <p className="text-sm font-medium">Blockchain Settings</p>
+                
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm">Blockchain Mode</p>
+                    <p className="text-xs text-muted-foreground">
+                      {usingBlockchain 
+                        ? "Using real blockchain testnet" 
+                        : "Using mock transactions"}
+                    </p>
+                  </div>
+                  <Button 
+                    variant={usingBlockchain ? "default" : "outline"} 
+                    onClick={toggleBlockchainMode}
+                    className="button-3d"
+                  >
+                    {usingBlockchain ? "Disable" : "Enable"}
+                  </Button>
+                </div>
+                
+                {usingBlockchain && (
+                  <div className="pt-2">
+                    <p className="text-sm mb-2">Network</p>
+                    <NetworkSelector onNetworkChange={handleNetworkChange} />
+                  </div>
+                )}
+              </div>
+              
               <Button 
                 variant="destructive" 
                 onClick={handleLogout}
@@ -325,15 +474,24 @@ export default function WalletDashboard() {
           <CardTitle className="flex items-center gap-2">
             <Wallet className="h-5 w-5" />
             Your Wallet
+            {usingBlockchain && (
+              <NetworkSelector onNetworkChange={handleNetworkChange} />
+            )}
           </CardTitle>
-          <CardDescription>Your USDT testnet wallet</CardDescription>
+          <CardDescription>
+            {usingBlockchain 
+              ? `Your ${getCurrentNetwork().name} wallet` 
+              : "Your USDT testnet wallet"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
               <div>
                 <p className="text-sm font-medium">Current Balance</p>
-                <p className="text-2xl font-bold">{balance} USDT</p>
+                <p className="text-2xl font-bold">
+                  {isLoading ? "Loading..." : `${balance} ${usingBlockchain ? getCurrentNetwork().symbol : "USDT"}`}
+                </p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -344,6 +502,7 @@ export default function WalletDashboard() {
                 }}
                 className="flex-1 button-3d"
                 variant={showSendForm ? "secondary" : "default"}
+                disabled={isLoading}
               >
                 <Send className="h-4 w-4 mr-2" />
                 Send
@@ -355,6 +514,7 @@ export default function WalletDashboard() {
                 }}
                 className="flex-1 button-3d"
                 variant={showReceiveForm ? "secondary" : "default"}
+                disabled={isLoading}
               >
                 <Download className="h-4 w-4 mr-2" />
                 Receive
@@ -379,7 +539,7 @@ export default function WalletDashboard() {
 
             {showSendForm && (
               <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
-                <h3 className="font-medium">Send USDT</h3>
+                <h3 className="font-medium">Send {usingBlockchain ? getCurrentNetwork().symbol : "USDT"}</h3>
                 <div className="space-y-4">
                   <div>
                     <label className="text-sm font-medium">Recipient Address</label>
@@ -387,23 +547,38 @@ export default function WalletDashboard() {
                       placeholder="Enter recipient's wallet address"
                       value={recipientAddress}
                       onChange={(e) => setRecipientAddress(e.target.value)}
+                      disabled={isLoading}
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium">Amount (USDT)</label>
+                    <label className="text-sm font-medium">Amount ({usingBlockchain ? getCurrentNetwork().symbol : "USDT"})</label>
                     <Input
                       type="number"
                       placeholder="Enter amount to send"
                       value={sendAmount}
                       onChange={(e) => setSendAmount(e.target.value)}
+                      disabled={isLoading}
                     />
                   </div>
                   <Button 
                     onClick={handleSendTransaction}
                     className="w-full button-3d"
+                    disabled={isLoading}
                   >
-                    <ArrowRight className="h-4 w-4 mr-2" />
-                    Send USDT
+                    {isLoading ? (
+                      <span className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </span>
+                    ) : (
+                      <>
+                        <ArrowRight className="h-4 w-4 mr-2" />
+                        Send {usingBlockchain ? getCurrentNetwork().symbol : "USDT"}
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
@@ -419,14 +594,21 @@ export default function WalletDashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {transactions.length === 0 ? (
+            {isLoading ? (
+              <div className="flex justify-center p-4">
+                <svg className="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              </div>
+            ) : transactions.length === 0 ? (
               <p className="text-center text-muted-foreground">
                 No transactions yet
               </p>
             ) : (
-              transactions.map((tx) => (
+              transactions.map((tx, index) => (
                 <div
-                  key={tx.id}
+                  key={tx.id || tx.hash || index}
                   className="p-4 rounded-lg border bg-card/50 space-y-2"
                 >
                   <div className="flex items-center justify-between">
@@ -435,22 +617,42 @@ export default function WalletDashboard() {
                         {tx.isReceived ? 'Received' : 'Sent'}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {new Date(tx.created_at).toLocaleString()}
+                        {tx.created_at 
+                          ? new Date(tx.created_at).toLocaleString() 
+                          : tx.timestamp 
+                            ? new Date(tx.timestamp).toLocaleString()
+                            : 'Unknown date'}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className={`font-medium ${tx.isReceived ? 'text-green-500' : 'text-red-500'}`}>
-                        {tx.displayAmount} USDT
+                        {tx.displayAmount} {usingBlockchain ? getCurrentNetwork().symbol : "USDT"}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {tx.status}
+                        {tx.status || 'completed'}
                       </p>
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground break-all">
                     {tx.isReceived ? 'From: ' : 'To: '}
-                    {tx.isReceived ? tx.sender_address : tx.recipient_address}
+                    {tx.isReceived 
+                      ? tx.sender_address || tx.from 
+                      : tx.recipient_address || tx.to}
                   </p>
+                  
+                  {usingBlockchain && tx.hash && (
+                    <div className="pt-1">
+                      <a 
+                        href={getExplorerUrl(tx.hash)} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary flex items-center hover:underline"
+                      >
+                        View on Explorer
+                        <ExternalLink className="h-3 w-3 ml-1" />
+                      </a>
+                    </div>
+                  )}
                 </div>
               ))
             )}
