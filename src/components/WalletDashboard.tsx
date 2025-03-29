@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { generateTestnetUSDTAddress } from "@/utils/walletUtils";
@@ -14,7 +13,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Moon, Settings, Sun } from "lucide-react";
 
-// Import refactored components
 import WalletInfo from "./wallet/WalletInfo";
 import SendForm from "./wallet/SendForm";
 import ReceiveForm from "./wallet/ReceiveForm";
@@ -51,7 +49,6 @@ export default function WalletDashboard() {
   }, [walletAddress, usingBlockchain]);
 
   useEffect(() => {
-    // Check if user prefers dark mode
     if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       setIsDarkMode(true);
       document.documentElement.classList.add('dark');
@@ -74,7 +71,6 @@ export default function WalletDashboard() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // First try to load existing wallet
     const { data: wallets, error: fetchError } = await supabase
       .from('wallets')
       .select('walletaddress, balance, private_key')
@@ -84,7 +80,6 @@ export default function WalletDashboard() {
     if (fetchError) {
       console.error('Error fetching wallet:', fetchError);
       
-      // If error is not 'no rows returned', handle it differently
       if (!fetchError.message.includes('no rows returned')) {
         toast({
           title: "Error",
@@ -94,9 +89,7 @@ export default function WalletDashboard() {
         return;
       }
       
-      // Continue to wallet creation if no wallet exists
     } else if (wallets) {
-      // Successfully retrieved wallet
       setWalletAddress(wallets.walletaddress);
       setBalance(wallets.balance || 0);
       if (wallets.private_key) {
@@ -106,19 +99,15 @@ export default function WalletDashboard() {
     }
 
     try {
-      // If no wallet exists, create one
       let generatedAddress = "";
       let generatedPrivateKey = "";
       
       if (usingBlockchain) {
-        // Create a real blockchain wallet
         const wallet = generateNewWallet();
         generatedAddress = wallet.address;
         generatedPrivateKey = wallet.privateKey;
       } else {
-        // Create a mock wallet address
         generatedAddress = generateTestnetUSDTAddress();
-        // For mock wallets, we don't need a real private key
         generatedPrivateKey = "0x" + Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
       }
 
@@ -128,7 +117,7 @@ export default function WalletDashboard() {
           { 
             user_id: user.id,
             walletaddress: generatedAddress,
-            balance: 100, // Initial balance for new users
+            balance: 100,
             private_key: generatedPrivateKey
           }
         ]);
@@ -174,12 +163,9 @@ export default function WalletDashboard() {
       return;
     }
 
-    // Process transactions to include transaction direction
     const processedTransactions = transactions?.map(tx => ({
       ...tx,
-      // Add isReceived flag to determine if this wallet received the transaction
       isReceived: tx.recipient_address === walletAddress,
-      // Format the display amount based on whether it was received or sent
       displayAmount: tx.recipient_address === walletAddress ? `+${tx.amount}` : `-${tx.amount}`
     })) || [];
 
@@ -191,11 +177,9 @@ export default function WalletDashboard() {
     
     setIsLoading(true);
     try {
-      // First update the wallet balance from blockchain
       const blockchainBalance = await getWalletBalance(walletAddress);
       setBalance(parseFloat(blockchainBalance));
       
-      // Then fetch recent transactions
       const txs = await getRecentTransactions(walletAddress);
       setTransactions(txs);
     } catch (error) {
@@ -259,14 +243,20 @@ export default function WalletDashboard() {
 
     try {
       if (usingBlockchain) {
-        // Send a real blockchain transaction
         if (!privateKey) {
           throw new Error("Private key not found");
+        }
+        
+        console.log("Starting blockchain transaction...");
+        
+        if (!recipientAddress.startsWith('0x')) {
+          throw new Error("Invalid blockchain address format");
         }
         
         const result = await sendTransaction(privateKey, recipientAddress, sendAmount);
         
         if (!result.success) {
+          console.error("Transaction failed:", result.error);
           throw new Error(result.error || "Transaction failed");
         }
         
@@ -275,10 +265,11 @@ export default function WalletDashboard() {
           description: `Transaction submitted with hash: ${result.hash?.slice(0, 10)}...`,
         });
         
-        // Reload blockchain data after transaction
-        await loadBlockchainTransactions();
+        setTimeout(async () => {
+          await loadBlockchainTransactions();
+          setIsLoading(false);
+        }, 3000);
       } else {
-        // Send a mock transaction
         const { data: { user } } = await supabase.auth.getUser();
         
         if (!user) {
@@ -290,7 +281,6 @@ export default function WalletDashboard() {
           return;
         }
 
-        // First, check if recipient wallet exists and get its current balance
         const { data: recipientWallet, error: recipientCheckError } = await supabase
           .from('wallets')
           .select('balance')
@@ -306,7 +296,6 @@ export default function WalletDashboard() {
           return;
         }
 
-        // Create the transaction
         const { error: transactionError } = await supabase
           .from('transactions')
           .insert([
@@ -322,7 +311,6 @@ export default function WalletDashboard() {
 
         if (transactionError) throw transactionError;
 
-        // Update sender's balance
         const { error: senderUpdateError } = await supabase
           .from('wallets')
           .update({ balance: balance - amount })
@@ -330,7 +318,6 @@ export default function WalletDashboard() {
 
         if (senderUpdateError) throw senderUpdateError;
 
-        // Update recipient's balance
         const { error: recipientUpdateError } = await supabase
           .from('wallets')
           .update({ 
@@ -345,27 +332,48 @@ export default function WalletDashboard() {
           description: "Transaction completed successfully",
         });
         
-        // Refresh data
         loadMockTransactions();
         setBalance(prev => prev - amount);
       }
 
-      // Reset form
       setShowSendForm(false);
+      setIsLoading(false);
     } catch (error) {
       console.error('Error creating transaction:', error);
+      
+      let errorMessage = "Failed to complete transaction";
+      
+      if (error instanceof Error) {
+        if (error.message.includes("insufficient funds")) {
+          errorMessage = "Insufficient funds for transaction and gas fees";
+        } else if (error.message.includes("nonce")) {
+          errorMessage = "Transaction nonce error - please try again";
+        } else if (error.message.includes("rejected")) {
+          errorMessage = "Transaction rejected by the network";
+        } else if (error.message.includes("invalid address")) {
+          errorMessage = "Invalid recipient address format";
+        } else if (error.message.includes("Invalid blockchain address")) {
+          errorMessage = "Invalid blockchain address format - must start with 0x";
+        } else if (error.message.includes("execution reverted")) {
+          errorMessage = "Transaction execution reverted by the network";
+        } else if (error.message.includes("Private key not found")) {
+          errorMessage = "Wallet private key not found - please recreate your wallet";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
-        title: "Error",
-        description: "Failed to complete transaction",
+        title: "Transaction Error",
+        description: errorMessage,
         variant: "destructive",
       });
-    } finally {
+      
       setIsLoading(false);
     }
   };
 
   const handleNetworkChange = (network: NetworkKey) => {
-    // Reload blockchain data when network changes
     if (usingBlockchain && walletAddress) {
       loadBlockchainTransactions();
     }

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowRight } from "lucide-react";
 import { getCurrentNetwork } from "@/utils/blockchainUtils";
+import { useToast } from "@/hooks/use-toast";
 
 interface SendFormProps {
   usingBlockchain: boolean;
@@ -14,10 +15,52 @@ interface SendFormProps {
 export default function SendForm({ usingBlockchain, isLoading, onSendTransaction }: SendFormProps) {
   const [recipientAddress, setRecipientAddress] = useState("");
   const [sendAmount, setSendAmount] = useState("");
+  const [errors, setErrors] = useState<{address?: string; amount?: string}>({});
+  const { toast } = useToast();
+
+  const validateForm = (): boolean => {
+    const newErrors: {address?: string; amount?: string} = {};
+    
+    // Validate address
+    if (!recipientAddress) {
+      newErrors.address = "Recipient address is required";
+    } else if (usingBlockchain && !recipientAddress.startsWith('0x')) {
+      newErrors.address = "Invalid blockchain address format";
+    }
+    
+    // Validate amount
+    if (!sendAmount) {
+      newErrors.amount = "Amount is required";
+    } else {
+      const amount = parseFloat(sendAmount);
+      if (isNaN(amount) || amount <= 0) {
+        newErrors.amount = "Amount must be a positive number";
+      }
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSend = () => {
-    onSendTransaction(recipientAddress, sendAmount);
-    // Let parent component handle clearing form fields after successful transaction
+    if (validateForm()) {
+      try {
+        onSendTransaction(recipientAddress, sendAmount);
+      } catch (error) {
+        console.error("Transaction submission error:", error);
+        toast({
+          title: "Transaction Error",
+          description: "Failed to submit transaction",
+          variant: "destructive",
+        });
+      }
+    } else {
+      toast({
+        title: "Validation Error",
+        description: "Please check the form for errors",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -27,11 +70,16 @@ export default function SendForm({ usingBlockchain, isLoading, onSendTransaction
         <div>
           <label className="text-sm font-medium">Recipient Address</label>
           <Input
-            placeholder="Enter recipient's wallet address"
+            placeholder={usingBlockchain ? "Enter 0x... blockchain address" : "Enter recipient's wallet address"}
             value={recipientAddress}
-            onChange={(e) => setRecipientAddress(e.target.value)}
+            onChange={(e) => {
+              setRecipientAddress(e.target.value);
+              if (errors.address) setErrors({...errors, address: undefined});
+            }}
             disabled={isLoading}
+            className={errors.address ? "border-red-500" : ""}
           />
+          {errors.address && <p className="text-xs text-red-500 mt-1">{errors.address}</p>}
         </div>
         <div>
           <label className="text-sm font-medium">Amount ({usingBlockchain ? getCurrentNetwork().symbol : "USDT"})</label>
@@ -39,9 +87,14 @@ export default function SendForm({ usingBlockchain, isLoading, onSendTransaction
             type="number"
             placeholder="Enter amount to send"
             value={sendAmount}
-            onChange={(e) => setSendAmount(e.target.value)}
+            onChange={(e) => {
+              setSendAmount(e.target.value);
+              if (errors.amount) setErrors({...errors, amount: undefined});
+            }}
             disabled={isLoading}
+            className={errors.amount ? "border-red-500" : ""}
           />
+          {errors.amount && <p className="text-xs text-red-500 mt-1">{errors.amount}</p>}
         </div>
         <Button 
           onClick={handleSend}

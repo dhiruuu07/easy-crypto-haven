@@ -60,18 +60,54 @@ export const getWalletBalance = async (address: string) => {
   return ethers.formatEther(balance);
 };
 
-// Send transaction
+// Send transaction with enhanced error handling
 export const sendTransaction = async (
   privateKey: string, 
   toAddress: string, 
   amount: string
 ) => {
   try {
+    console.log('Preparing to send transaction...');
+    
+    // Validate inputs
+    if (!privateKey || !toAddress || !amount) {
+      console.error('Missing required parameters for transaction');
+      return {
+        success: false,
+        error: 'Missing required parameters'
+      };
+    }
+    
+    // Connect wallet with provider
     const wallet = new ethers.Wallet(privateKey, getProvider());
+    console.log('Wallet connected, sending from:', wallet.address);
+    
+    // Check if we have enough balance
+    const balance = await wallet.provider.getBalance(wallet.address);
+    const sendAmount = ethers.parseEther(amount);
+    if (balance < sendAmount) {
+      console.error('Insufficient balance', {
+        balance: ethers.formatEther(balance),
+        sendAmount: amount
+      });
+      return {
+        success: false,
+        error: 'Insufficient balance'
+      };
+    }
+    
+    // Calculate gas cost (for better UX we need to estimate)
+    const gasPrice = await wallet.provider.getFeeData();
+    console.log('Current gas price:', gasPrice.gasPrice ? ethers.formatUnits(gasPrice.gasPrice, 'gwei') : 'unknown', 'gwei');
+    
+    // Send transaction with explicit gas limit to avoid estimation errors
     const tx = await wallet.sendTransaction({
       to: toAddress,
-      value: ethers.parseEther(amount)
+      value: sendAmount,
+      gasLimit: 21000 // Standard gas limit for simple ETH transfers
     });
+    
+    console.log('Transaction submitted:', tx.hash);
     
     return {
       success: true,
@@ -80,9 +116,26 @@ export const sendTransaction = async (
     };
   } catch (error) {
     console.error('Transaction error:', error);
+    // Provide more useful error message
+    let errorMessage = 'Unknown error';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      
+      // Try to extract more useful info from common ethers errors
+      if (errorMessage.includes('insufficient funds')) {
+        errorMessage = 'Insufficient funds for transaction and gas fees';
+      } else if (errorMessage.includes('nonce')) {
+        errorMessage = 'Transaction nonce error - please try again';
+      } else if (errorMessage.includes('rejected')) {
+        errorMessage = 'Transaction rejected by the network';
+      } else if (errorMessage.includes('timeout')) {
+        errorMessage = 'Network timeout - please try again';
+      }
+    }
+    
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: errorMessage
     };
   }
 };
