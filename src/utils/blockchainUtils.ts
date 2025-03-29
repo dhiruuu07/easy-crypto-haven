@@ -93,7 +93,7 @@ export const getTransaction = async (txHash: string) => {
   return await provider.getTransaction(txHash);
 };
 
-// Get recent transactions for an address (simplified version that would need a block explorer API in production)
+// Get recent transactions for an address
 export const getRecentTransactions = async (address: string, limit = 10) => {
   try {
     // This is a simplified implementation
@@ -111,21 +111,26 @@ export const getRecentTransactions = async (address: string, limit = 10) => {
       if (!block || !block.transactions) continue;
       
       for (const tx of block.transactions) {
-        if (tx.from?.toLowerCase() === address.toLowerCase() || 
-            tx.to?.toLowerCase() === address.toLowerCase()) {
-          transactions.push({
-            hash: tx.hash,
-            from: tx.from,
-            to: tx.to,
-            value: tx.value ? ethers.formatEther(tx.value) : '0',
-            timestamp: block.timestamp ? new Date(block.timestamp * 1000).toISOString() : '',
-            isReceived: tx.to?.toLowerCase() === address.toLowerCase(),
-            displayAmount: tx.to?.toLowerCase() === address.toLowerCase() 
-              ? `+${tx.value ? ethers.formatEther(tx.value) : '0'}` 
-              : `-${tx.value ? ethers.formatEther(tx.value) : '0'}`
-          });
+        // Check if the transaction has the required properties
+        if (typeof tx === 'object' && tx !== null) {
+          const txObj = tx as any; // Type assertion to access properties
           
-          if (transactions.length >= limit) break;
+          if (txObj.from?.toLowerCase() === address.toLowerCase() || 
+              txObj.to?.toLowerCase() === address.toLowerCase()) {
+            transactions.push({
+              hash: txObj.hash,
+              from: txObj.from,
+              to: txObj.to,
+              value: txObj.value ? ethers.formatEther(txObj.value) : '0',
+              timestamp: block.timestamp ? new Date(block.timestamp * 1000).toISOString() : '',
+              isReceived: txObj.to?.toLowerCase() === address.toLowerCase(),
+              displayAmount: txObj.to?.toLowerCase() === address.toLowerCase() 
+                ? `+${txObj.value ? ethers.formatEther(txObj.value) : '0'}` 
+                : `-${txObj.value ? ethers.formatEther(txObj.value) : '0'}`
+            });
+            
+            if (transactions.length >= limit) break;
+          }
         }
       }
       

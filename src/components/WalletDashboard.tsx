@@ -1,14 +1,9 @@
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Send, Download, Settings, Wallet, Copy, ArrowRight, LogOut, Sun, Moon, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateTestnetUSDTAddress } from "@/utils/walletUtils";
 import {
   NetworkKey,
-  createWalletFromPrivateKey,
   generateNewWallet,
   getWalletBalance,
   sendTransaction,
@@ -16,22 +11,28 @@ import {
   getCurrentNetwork
 } from "@/utils/blockchainUtils";
 import { supabase } from "@/integrations/supabase/client";
-import NetworkSelector from "./NetworkSelector";
+import { Button } from "@/components/ui/button";
+import { Moon, Settings, Sun } from "lucide-react";
+
+// Import refactored components
+import WalletInfo from "./wallet/WalletInfo";
+import SendForm from "./wallet/SendForm";
+import ReceiveForm from "./wallet/ReceiveForm";
+import TransactionList from "./wallet/TransactionList";
+import SettingsPanel from "./wallet/SettingsPanel";
 
 export default function WalletDashboard() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [walletAddress, setWalletAddress] = useState("");
-  const [privateKey, setPrivateKey] = useState(""); // Store private key safely
+  const [privateKey, setPrivateKey] = useState(""); 
   const [balance, setBalance] = useState<number>(0);
   const [showSendForm, setShowSendForm] = useState(false);
   const [showReceiveForm, setShowReceiveForm] = useState(false);
-  const [recipientAddress, setRecipientAddress] = useState("");
-  const [sendAmount, setSendAmount] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [usingBlockchain, setUsingBlockchain] = useState(false); // Toggle between mock and real blockchain
+  const [usingBlockchain, setUsingBlockchain] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -39,7 +40,6 @@ export default function WalletDashboard() {
     loadOrCreateWallet();
   }, []);
 
-  // Add a separate effect for loading transactions that depends on walletAddress
   useEffect(() => {
     if (walletAddress) {
       if (usingBlockchain) {
@@ -81,7 +81,21 @@ export default function WalletDashboard() {
       .eq('user_id', user.id)
       .single();
 
-    if (wallets) {
+    if (fetchError) {
+      console.error('Error fetching wallet:', fetchError);
+      
+      // If error is not 'no rows returned', handle it differently
+      if (!fetchError.message.includes('no rows returned')) {
+        toast({
+          title: "Error",
+          description: "Failed to load wallet data",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Continue to wallet creation if no wallet exists
+    } else if (wallets) {
       setWalletAddress(wallets.walletaddress);
       setBalance(wallets.balance || 0);
       if (wallets.private_key) {
@@ -211,7 +225,7 @@ export default function WalletDashboard() {
     }
   };
 
-  const handleSendTransaction = async () => {
+  const handleSendTransaction = async (recipientAddress: string, sendAmount: string) => {
     if (!walletAddress || !recipientAddress || !sendAmount) {
       toast({
         title: "Error",
@@ -337,8 +351,6 @@ export default function WalletDashboard() {
 
       // Reset form
       setShowSendForm(false);
-      setRecipientAddress("");
-      setSendAmount("");
     } catch (error) {
       console.error('Error creating transaction:', error);
       toast({
@@ -386,11 +398,6 @@ export default function WalletDashboard() {
     }
   };
 
-  const getExplorerUrl = (txHash: string) => {
-    const network = getCurrentNetwork();
-    return `${network.blockExplorer}/tx/${txHash}`;
-  };
-
   return (
     <div className="space-y-6 animate-in">
       <div className="flex justify-between items-center">
@@ -415,250 +422,53 @@ export default function WalletDashboard() {
       </div>
 
       {showSettings && (
-        <Card className="glass-morphism">
-          <CardHeader>
-            <CardTitle>Settings</CardTitle>
-            <CardDescription>Your account details</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Email Address</p>
-                <p className="text-sm text-muted-foreground">{userEmail}</p>
-              </div>
-              
-              <div className="space-y-2 pt-2 border-t">
-                <p className="text-sm font-medium">Blockchain Settings</p>
-                
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm">Blockchain Mode</p>
-                    <p className="text-xs text-muted-foreground">
-                      {usingBlockchain 
-                        ? "Using real blockchain testnet" 
-                        : "Using mock transactions"}
-                    </p>
-                  </div>
-                  <Button 
-                    variant={usingBlockchain ? "default" : "outline"} 
-                    onClick={toggleBlockchainMode}
-                    className="button-3d"
-                  >
-                    {usingBlockchain ? "Disable" : "Enable"}
-                  </Button>
-                </div>
-                
-                {usingBlockchain && (
-                  <div className="pt-2">
-                    <p className="text-sm mb-2">Network</p>
-                    <NetworkSelector onNetworkChange={handleNetworkChange} />
-                  </div>
-                )}
-              </div>
-              
-              <Button 
-                variant="destructive" 
-                onClick={handleLogout}
-                className="w-full button-3d-destructive"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <SettingsPanel 
+          userEmail={userEmail}
+          usingBlockchain={usingBlockchain}
+          onToggleBlockchainMode={toggleBlockchainMode}
+          onNetworkChange={handleNetworkChange}
+          onLogout={handleLogout}
+        />
       )}
 
-      <Card className="glass-morphism">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5" />
-            Your Wallet
-            {usingBlockchain && (
-              <NetworkSelector onNetworkChange={handleNetworkChange} />
-            )}
-          </CardTitle>
-          <CardDescription>
-            {usingBlockchain 
-              ? `Your ${getCurrentNetwork().name} wallet` 
-              : "Your USDT testnet wallet"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-              <div>
-                <p className="text-sm font-medium">Current Balance</p>
-                <p className="text-2xl font-bold">
-                  {isLoading ? "Loading..." : `${balance} ${usingBlockchain ? getCurrentNetwork().symbol : "USDT"}`}
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button 
-                onClick={() => {
-                  setShowSendForm(true);
-                  setShowReceiveForm(false);
-                }}
-                className="flex-1 button-3d"
-                variant={showSendForm ? "secondary" : "default"}
-                disabled={isLoading}
-              >
-                <Send className="h-4 w-4 mr-2" />
-                Send
-              </Button>
-              <Button 
-                onClick={() => {
-                  setShowReceiveForm(true);
-                  setShowSendForm(false);
-                }}
-                className="flex-1 button-3d"
-                variant={showReceiveForm ? "secondary" : "default"}
-                disabled={isLoading}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Receive
-              </Button>
-            </div>
+      <WalletInfo
+        balance={balance}
+        walletAddress={walletAddress}
+        isLoading={isLoading}
+        usingBlockchain={usingBlockchain}
+        onNetworkChange={handleNetworkChange}
+        onShowSendForm={() => {
+          setShowSendForm(true);
+          setShowReceiveForm(false);
+        }}
+        onShowReceiveForm={() => {
+          setShowReceiveForm(true);
+          setShowSendForm(false);
+        }}
+        showSendForm={showSendForm}
+        showReceiveForm={showReceiveForm}
+      />
 
-            {showReceiveForm && (
-              <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
-                <h3 className="font-medium">Your Wallet Address</h3>
-                <div className="flex gap-2">
-                  <Input
-                    value={walletAddress}
-                    readOnly
-                    className="flex-1"
-                  />
-                  <Button onClick={handleCopyAddress} variant="outline" className="button-3d">
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+      {showReceiveForm && (
+        <ReceiveForm 
+          walletAddress={walletAddress}
+          onCopyAddress={handleCopyAddress}
+        />
+      )}
 
-            {showSendForm && (
-              <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
-                <h3 className="font-medium">Send {usingBlockchain ? getCurrentNetwork().symbol : "USDT"}</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium">Recipient Address</label>
-                    <Input
-                      placeholder="Enter recipient's wallet address"
-                      value={recipientAddress}
-                      onChange={(e) => setRecipientAddress(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Amount ({usingBlockchain ? getCurrentNetwork().symbol : "USDT"})</label>
-                    <Input
-                      type="number"
-                      placeholder="Enter amount to send"
-                      value={sendAmount}
-                      onChange={(e) => setSendAmount(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <Button 
-                    onClick={handleSendTransaction}
-                    className="w-full button-3d"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center">
-                        <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Processing...
-                      </span>
-                    ) : (
-                      <>
-                        <ArrowRight className="h-4 w-4 mr-2" />
-                        Send {usingBlockchain ? getCurrentNetwork().symbol : "USDT"}
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {showSendForm && (
+        <SendForm
+          usingBlockchain={usingBlockchain}
+          isLoading={isLoading}
+          onSendTransaction={handleSendTransaction}
+        />
+      )}
 
-      <Card className="glass-morphism">
-        <CardHeader>
-          <CardTitle>Recent Transactions</CardTitle>
-          <CardDescription>Your transaction history</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {isLoading ? (
-              <div className="flex justify-center p-4">
-                <svg className="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              </div>
-            ) : transactions.length === 0 ? (
-              <p className="text-center text-muted-foreground">
-                No transactions yet
-              </p>
-            ) : (
-              transactions.map((tx, index) => (
-                <div
-                  key={tx.id || tx.hash || index}
-                  className="p-4 rounded-lg border bg-card/50 space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium">
-                        {tx.isReceived ? 'Received' : 'Sent'}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {tx.created_at 
-                          ? new Date(tx.created_at).toLocaleString() 
-                          : tx.timestamp 
-                            ? new Date(tx.timestamp).toLocaleString()
-                            : 'Unknown date'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`font-medium ${tx.isReceived ? 'text-green-500' : 'text-red-500'}`}>
-                        {tx.displayAmount} {usingBlockchain ? getCurrentNetwork().symbol : "USDT"}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {tx.status || 'completed'}
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground break-all">
-                    {tx.isReceived ? 'From: ' : 'To: '}
-                    {tx.isReceived 
-                      ? tx.sender_address || tx.from 
-                      : tx.recipient_address || tx.to}
-                  </p>
-                  
-                  {usingBlockchain && tx.hash && (
-                    <div className="pt-1">
-                      <a 
-                        href={getExplorerUrl(tx.hash)} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary flex items-center hover:underline"
-                      >
-                        View on Explorer
-                        <ExternalLink className="h-3 w-3 ml-1" />
-                      </a>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <TransactionList 
+        transactions={transactions}
+        isLoading={isLoading}
+        usingBlockchain={usingBlockchain}
+      />
     </div>
   );
 }
