@@ -68,6 +68,7 @@ export type Database = {
           balance: number | null
           created_at: string | null
           id: number
+          private_key: string | null
           user_id: string
           walletaddress: string
         }
@@ -75,6 +76,7 @@ export type Database = {
           balance?: number | null
           created_at?: string | null
           id?: number
+          private_key?: string | null
           user_id: string
           walletaddress: string
         }
@@ -82,6 +84,7 @@ export type Database = {
           balance?: number | null
           created_at?: string | null
           id?: number
+          private_key?: string | null
           user_id?: string
           walletaddress?: string
         }

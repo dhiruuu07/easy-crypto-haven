@@ -96,6 +96,7 @@ export default function WalletDashboard() {
       
       // Continue to wallet creation if no wallet exists
     } else if (wallets) {
+      // Successfully retrieved wallet
       setWalletAddress(wallets.walletaddress);
       setBalance(wallets.balance || 0);
       if (wallets.private_key) {
