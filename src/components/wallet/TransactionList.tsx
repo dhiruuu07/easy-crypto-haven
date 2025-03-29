@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExternalLink } from "lucide-react";
 import { getCurrentNetwork } from "@/utils/blockchainUtils";
+import { Button } from "@/components/ui/button";
 
 interface Transaction {
   id?: string | number;
@@ -36,7 +37,11 @@ export default function TransactionList({ transactions, isLoading, usingBlockcha
     <Card className="glass-morphism">
       <CardHeader>
         <CardTitle>Recent Transactions</CardTitle>
-        <CardDescription>Your transaction history</CardDescription>
+        <CardDescription>
+          {usingBlockchain 
+            ? `Your ${getCurrentNetwork().name} transaction history. Click on "View on Explorer" to see details on the blockchain.` 
+            : "Your transaction history"}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -88,15 +93,15 @@ export default function TransactionList({ transactions, isLoading, usingBlockcha
                 
                 {usingBlockchain && tx.hash && (
                   <div className="pt-1">
-                    <a 
-                      href={getExplorerUrl(tx.hash)} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary flex items-center hover:underline"
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => window.open(getExplorerUrl(tx.hash!), '_blank')}
+                      className="text-xs text-primary flex items-center hover:bg-primary/10 w-full justify-center"
                     >
-                      View on Explorer
+                      View on {getCurrentNetwork().name} Explorer
                       <ExternalLink className="h-3 w-3 ml-1" />
-                    </a>
+                    </Button>
                   </div>
                 )}
               </div>
